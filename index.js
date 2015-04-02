@@ -1,3 +1,5 @@
+'use strict';
+
 var config = require('config');
 var Twitter = require('twitter');
 var emitStream = require('emit-stream');
@@ -5,12 +7,11 @@ var es = require('event-stream');
 var debug = require('debug')('debug');
 
 var client = new Twitter({
-  consumer_key: config.get('twitter.consumerKey') || process.env.TWITTER_CONSUMER_KEY,
-  consumer_secret: config.get('twitter.consumerSecret') || process.env.TWITTER_CONSUMER_SECRET,
-  access_token_key: config.get('twitter.accessTokenKey') || process.env.TWITTER_ACCESS_TOKEN_KEY,
-  access_token_secret: config.get('twitter.accessTokenSecret') || process.env.TWITTER_ACCESS_TOKEN_SECRET
+  consumer_key: config.get('twitter.consumerKey'),
+  consumer_secret: config.get('twitter.consumerSecret'),
+  access_token_key: config.get('twitter.accessTokenKey'),
+  access_token_secret: config.get('twitter.accessTokenSecret')
 });
-
 
 var RE = /if\s+everyone\s+would/gi;
 var track = 'if everyone would';
