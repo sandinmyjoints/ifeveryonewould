@@ -67,7 +67,8 @@ function filter(tweet, cb) {
 
 function _textFromRetweet(text) {
   /* RT @voguezayn_: STOP HATING */
-  var re = /^\s*RT @\S+:\s*(.*)$/;
+  /* RT @mt_newman That's amazing. */
+  var re = /^\s*RT\s+@\S+(?::)?\s*(.*)$/;
   var result = re.exec(text);
   if(result) {
     return result[1] || null;
@@ -113,7 +114,14 @@ function remember(canonTweet, cb) {
 function retweet(canonTweet, cb) {
   var tweet = canonTweet.tweet;
   var canonical = canonTweet.canonical;
-  streamLog('DEBUG: ' + 'retweeting: ', canonical);
+  streamLog('retweeting: ', canonical);
+  // client.post('status/retweet/' + tweet.id, function(err, retweet) {
+  //   if(err) {
+  //     console.log('error: ', err);
+  //   } else {
+  //     console.log('success');
+  //   }
+  // });
 }
 
 
