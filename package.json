@@ -4,7 +4,8 @@
   "description": "If everyone would.",
   "main": "index.js",
   "scripts": {
-    "test": "eslint ."
+    "test": "eslint .",
+    "start": "node index.js"
   },
   "author": "William Bert <william.bert@gmail.com>",
   "license": "ISC",
