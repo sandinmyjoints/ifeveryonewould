@@ -116,13 +116,15 @@ function retweet(canonTweet, cb) {
   var tweet = canonTweet.tweet;
   var canonical = canonTweet.canonical;
   streamLog('retweeting: ', canonical);
-  // client.post('status/retweet/' + tweet.id, function(err, retweet) {
-  //   if(err) {
-  //     console.log('error: ', err);
-  //   } else {
-  //     console.log('success');
-  //   }
-  // });
+
+  var url = 'statuses/retweet/' + tweet.id;
+  client.post(url, function(err, retweet) {
+    if(err) {
+      console.log('error: ', err);
+    } else {
+      console.log('success');
+    }
+  });
 }
 
 
