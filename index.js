@@ -1,4 +1,5 @@
 'use strict';
+/* eslint no-console: 0 */
 
 var config = require('config');
 var Twitter = require('twitter');
@@ -30,11 +31,11 @@ function resetRetryCount(data, cb) {
 }
 
 function countTweet(data, cb) {
-  if(tweetCount % 10 === 0) {
+  if (tweetCount % 10 === 0) {
     debug('tweetCount: ', tweetCount);
   }
 
-  if(++tweetCount >= 100) {
+  if (++tweetCount >= 100) {
     process.stdout.write('.');
     debug('resetting tweet count to zero.');
     tweetCount = 0;
@@ -43,15 +44,14 @@ function countTweet(data, cb) {
 }
 
 function pickTweet(data, cb) {
-  if(data[1]) {
+  if (data[1]) {
     return cb(null, data[1]);
-  } else {
-    return cb();
   }
+  return cb();
 }
 
 function dropMTs(tweet, cb) {
-  if(/^\s*MT:/.test(tweet.text)) {
+  if (/^\s*MT:/.test(tweet.text)) {
     debug('dropping MT: ', tweet.text);
     return cb();
   }
@@ -59,11 +59,10 @@ function dropMTs(tweet, cb) {
 }
 
 function filter(tweet, cb) {
-  if(RE.test(tweet.text)) {
+  if (RE.test(tweet.text)) {
     return cb(null, tweet);
-  } else {
-    return cb();
   }
+  return cb();
 }
 
 function _textFromRetweet(text) {
@@ -71,7 +70,7 @@ function _textFromRetweet(text) {
   /* RT @mt_newman That's amazing. */
   var re = /^\s*RT\s+@\S+(?::)?\s*(.*)$/;
   var result = re.exec(text);
-  if(result) {
+  if (result) {
     return result[1] || null;
   }
   return text;
@@ -80,7 +79,7 @@ function _textFromRetweet(text) {
 function canonicalize(tweet, cb) {
   var textFromRetweet = _textFromRetweet(tweet.text);
   debug('textFromRetweet: ', textFromRetweet);
-  if(!textFromRetweet) {
+  if (!textFromRetweet) {
     return cb();
   }
 
@@ -93,7 +92,7 @@ function canonicalize(tweet, cb) {
 }
 
 function dropRepeats(canonTweet, cb) {
-  if(memory.indexOf(canonTweet.canonical) > -1) {
+  if (memory.indexOf(canonTweet.canonical) > -1) {
     debug('dropping repeat');
     return cb();
   }
@@ -104,7 +103,7 @@ function remember(canonTweet, cb) {
   memory.push(canonTweet.canonical);
   debug('remembering. memory length is ', memory.length);
 
-  if(memory.length > 10000) {
+  if (memory.length > 10000) {
     debug('forgetting.');
     memory.shift();
   }
@@ -118,18 +117,18 @@ function retweet(canonTweet, cb) {
   streamLog('retweeting: ', canonical);
 
   var url = 'statuses/retweet/' + tweet.id;
-  client.post(url, function(err, retweet) {
-    if(err) {
+  client.post(url, function(err) {
+    if (err) {
       console.log('error: ', err);
-    } else {
-      console.log('success');
+      return cb(err);
     }
+    console.log('success');
+    return cb(null);
   });
 }
 
-
 function retry(error) {
-  if(error) {
+  if (error) {
     streamLog('error: ', error);
   }
   streamLog('retry ' + retryCount);
@@ -151,7 +150,7 @@ function connect() {
       .pipe(es.map(retweet));
 
     streamStream.on('error', function(err) {
-      console.log('streamStream error: ', error);
+      console.log('streamStream error: ', err);
     });
 
     stream.on('error', retry);
