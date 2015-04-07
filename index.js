@@ -116,8 +116,7 @@ function retweet(canonTweet, cb) {
   var canonical = canonTweet.canonical;
   streamLog('retweeting: ', canonical);
 
-  var url = 'statuses/retweet/' + tweet.id;
-  client.post(url, function(err) {
+  client.post('statuses/retweet/' + tweet.id_str, {}, function(err) {
     if (err) {
       console.log('error: ', err);
       return cb(err);
