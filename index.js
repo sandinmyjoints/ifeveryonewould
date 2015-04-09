@@ -19,6 +19,7 @@ var track = 'if everyone would';
 var retryCount = 0;
 var tweetCount = 99;
 var memory = [];
+var memoryTweets = [];
 
 function streamLog() {
   process.stdout.write('\n');
@@ -86,8 +87,17 @@ function canonicalize(tweet, cb) {
 }
 
 function dropRepeats(canonTweet, cb) {
+  var tweet = canonTweet.tweet;
+  if (tweet.retweeted_status) {
+    debug('new tweet with id_str ' + tweet.id_str + ' was in reply to ' + tweet.retweeted_status.id_str);
+    if (memoryTweets.indexOf(tweet.retweeted_status.id_str) > -1) {
+      debug('dropping repeat due to id');
+      return cb();
+    }
+  }
+
   if (memory.indexOf(canonTweet.canonical) > -1) {
-    debug('dropping repeat');
+    debug('dropping repeat due to canonical');
     return cb();
   }
   return cb(null, canonTweet);
@@ -95,14 +105,21 @@ function dropRepeats(canonTweet, cb) {
 
 function remember(canonTweet, cb) {
   memory.push(canonTweet.canonical);
-  debug('remembering. memory length is ', memory.length);
+  memoryTweets.push(canonTweet.tweet.id_str);
+  debug('remembering. memory length is %d', memory.length);
 
   if (memory.length > 10000) {
     debug('forgetting.');
     memory.shift();
   }
 
-  cb(null, canonTweet);
+  if (memoryTweets.length > 10000) {
+    debug('forgetting.');
+    memoryTweets.shift();
+  }
+
+  console.log('DEBUG: ' + 'callback from remember');
+  return cb(null, canonTweet);
 }
 
 function retweet(canonTweet, cb) {
