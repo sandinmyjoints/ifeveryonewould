@@ -25,9 +25,8 @@ function streamLog() {
   console.log.apply(console, arguments);
 }
 
-function resetRetryCount(data, cb) {
+function resetRetryCount() {
   retryCount = 0;
-  cb(null, data);
 }
 
 function countTweet(data, cb) {
@@ -45,6 +44,7 @@ function countTweet(data, cb) {
 
 function pickTweet(data, cb) {
   if (data[1]) {
+    resetRetryCount();
     return cb(null, data[1]);
   }
   return cb();
@@ -138,7 +138,6 @@ function connect() {
   console.log('connecting');
   client.stream('statuses/filter', {track: track}, function(stream) {
     var streamStream = emitStream(stream)
-      .pipe(es.map(resetRetryCount))
       .pipe(es.map(countTweet))
       .pipe(es.map(pickTweet))
       .pipe(es.map(dropMTs))
