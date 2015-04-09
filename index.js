@@ -30,13 +30,8 @@ function resetRetryCount() {
 }
 
 function countTweet(data, cb) {
-  if (tweetCount % 10 === 0) {
-    debug('tweetCount: ', tweetCount);
-  }
-
   if (++tweetCount >= 100) {
     process.stdout.write('.');
-    debug('resetting tweet count to zero.');
     tweetCount = 0;
   }
   cb(null, data);
@@ -78,7 +73,6 @@ function _textFromRetweet(text) {
 
 function canonicalize(tweet, cb) {
   var textFromRetweet = _textFromRetweet(tweet.text);
-  debug('textFromRetweet: ', textFromRetweet);
   if (!textFromRetweet) {
     return cb();
   }
