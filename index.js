@@ -123,6 +123,7 @@ function remember(canonTweet, cb) {
 }
 
 function retweet(canonTweet, cb) {
+  console.log('DEBUG: ' + 'inside of retweet');
   var tweet = canonTweet.tweet;
   var canonical = canonTweet.canonical;
   streamLog('retweeting: ', canonical);
