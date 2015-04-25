@@ -130,7 +130,7 @@ function retweet(canonTweet, cb) {
 
   client.post('statuses/retweet/' + tweet.id_str, {}, function(err) {
     if (err) {
-      console.log('error: ', err);
+      console.log('error posting retweet: ', err);
       return cb(err);
     }
     console.log('success');
@@ -140,7 +140,7 @@ function retweet(canonTweet, cb) {
 
 function retry(error) {
   if (error) {
-    streamLog('error: ', error);
+    streamLog('inside retry: error: ', error);
   }
   streamLog('retry ' + retryCount);
   setTimeout(connect, 5000 * retryCount++);
@@ -161,6 +161,7 @@ function connect() {
 
     streamStream.on('error', function(err) {
       console.log('streamStream error: ', err);
+      retry();
     });
 
     stream.on('error', retry);
