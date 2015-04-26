@@ -118,12 +118,10 @@ function remember(canonTweet, cb) {
     memoryTweets.shift();
   }
 
-  console.log('DEBUG: ' + 'callback from remember');
   return cb(null, canonTweet);
 }
 
 function retweet(canonTweet, cb) {
-  console.log('DEBUG: ' + 'inside of retweet');
   var tweet = canonTweet.tweet;
   var canonical = canonTweet.canonical;
   streamLog('retweeting: ', canonical);
@@ -133,38 +131,45 @@ function retweet(canonTweet, cb) {
       console.log('error posting retweet: ', err);
       return cb(err);
     }
-    console.log('success');
     return cb(null);
   });
 }
 
 function retry(error) {
   if (error) {
-    streamLog('inside retry: error: ', error);
+    streamLog('retry: error: ', error);
   }
   streamLog('retry ' + retryCount);
   setTimeout(connect, 5000 * retryCount++);
 }
 
+function createStream(tweetStream) {
+  streamLog('creating stream');
+
+  var stream = emitStream(tweetStream)
+    .pipe(es.map(countTweet))
+    .pipe(es.map(pickTweet))
+    .pipe(es.map(dropMTs))
+    .pipe(es.map(filter))
+    .pipe(es.map(canonicalize))
+    .pipe(es.map(dropRepeats))
+    .pipe(es.map(remember))
+    .pipe(es.map(retweet));
+
+  stream.on('error', function(err) {
+    console.log('stream error: ', err);
+    stream.end();
+    createStream(tweetStream);
+  });
+
+  return stream;
+}
+
 function connect() {
   console.log('connecting');
-  client.stream('statuses/filter', {track: track}, function(stream) {
-    var streamStream = emitStream(stream)
-      .pipe(es.map(countTweet))
-      .pipe(es.map(pickTweet))
-      .pipe(es.map(dropMTs))
-      .pipe(es.map(filter))
-      .pipe(es.map(canonicalize))
-      .pipe(es.map(dropRepeats))
-      .pipe(es.map(remember))
-      .pipe(es.map(retweet));
-
-    streamStream.on('error', function(err) {
-      console.log('streamStream error: ', err);
-      retry();
-    });
-
-    stream.on('error', retry);
+  client.stream('statuses/filter', {track: track}, function(tweetStream) {
+    createStream(tweetStream);
+    tweetStream.on('tweetStream error', retry);
   });
 }
 
