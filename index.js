@@ -6,6 +6,8 @@ var Twitter = require('twitter');
 var emitStream = require('emit-stream');
 var es = require('event-stream');
 var debug = require('debug')('debug');
+var leveldb = require('level');
+var db = leveldb('./tweetdb');
 
 var client = new Twitter({
   consumer_key: config.get('twitter.consumerKey'),
@@ -88,37 +90,27 @@ function canonicalize(tweet, cb) {
 
 function dropRepeats(canonTweet, cb) {
   var tweet = canonTweet.tweet;
+
   if (tweet.retweeted_status) {
     debug('new tweet with id_str ' + tweet.id_str + ' was in reply to ' + tweet.retweeted_status.id_str);
-    if (memoryTweets.indexOf(tweet.retweeted_status.id_str) > -1) {
-      debug('dropping repeat due to id');
-      return cb();
-    }
-  }
+    db.get(tweet.retweeted_status.id_str, function(err, wasAlreadyRetweeted) {
+      if(wasAlreadyRetweeted) {
+        return cb();
+      }
+      return cb(null, canonTweet);
+    });
 
-  if (memory.indexOf(canonTweet.canonical) > -1) {
-    debug('dropping repeat due to canonical');
-    return cb();
+  } else {
+    return cb(null, canonTweet);
   }
-  return cb(null, canonTweet);
 }
 
 function remember(canonTweet, cb) {
-  memory.push(canonTweet.canonical);
-  memoryTweets.push(canonTweet.tweet.id_str);
-  debug('remembering. memory length is %d', memory.length);
-
-  if (memory.length > 10000) {
-    debug('forgetting.');
-    memory.shift();
-  }
-
-  if (memoryTweets.length > 10000) {
-    debug('forgetting.');
-    memoryTweets.shift();
-  }
-
-  return cb(null, canonTweet);
+  debug('remembering.');
+  var tweet = canonTweet.tweet;
+  db.put(tweet.id_str, true, function(err) {
+    return cb(err, canonTweet);
+  });
 }
 
 function retweet(canonTweet, cb) {
