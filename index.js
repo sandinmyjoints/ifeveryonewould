@@ -188,7 +188,7 @@ var port = process.env.OPENSHIFT_NODEJS_PORT || 8080;
 
 http.createServer(function (req, res) {
   console.log('pinged at ' + req.url);
-  res.writeHead(201);
+  res.writeHead(204);
   res.end();
 }).listen(port, ipAddress);
 
