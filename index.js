@@ -42,7 +42,6 @@ function countTweet(data, cb) {
 
 function pickTweet(data, cb) {
   if (data[1]) {
-    resetRetryCount();
     return cb(null, data[1]);
   }
   return cb();
@@ -76,6 +75,7 @@ function _textFromRetweet(text) {
 
 function canonicalize(tweet, cb) {
   var textFromRetweet = _textFromRetweet(tweet.text);
+  resetRetryCount();
   if (!textFromRetweet) {
     return cb();
   }
