@@ -182,4 +182,15 @@ process.on('exit', function() { terminator(); });
   process.on(element, function() { terminator(element); });
 });
 
+var http = require('http');
+var ipAddress = process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1';
+var port = process.env.OPENSHIFT_NODEJS_PORT || 8080;
+
+http.createServer(function (req, res) {
+  console.log('pinged at ', req.path);
+  res.writeHead(201);
+  res.end();
+}).listen(port, ipAddress);
+
+// Main.
 connect();
