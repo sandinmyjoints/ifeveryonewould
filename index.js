@@ -2,14 +2,12 @@
 /* eslint no-console: 0 */
 
 var config = require('config');
-var Twitter = require('twitter');
+var Twit = require('twit');
 var emitStream = require('emit-stream');
 var es = require('event-stream');
 var debug = require('debug')('debug');
 var leveldb = require('level');
 var db = leveldb('./tweetdb');
-
-var client;
 
 var RE = /if\s+everyone\s+would/gi;
 var track = 'if everyone would';
@@ -36,7 +34,8 @@ function countTweet(data, cb) {
 }
 
 function pickTweet(data, cb) {
-  if (data[1]) {
+  debug('event type', data[0]);
+  if (data[0] === 'tweet') {
     return cb(null, data[1]);
   }
   return cb();
@@ -113,29 +112,12 @@ function retweet(canonTweet, cb) {
   var canonical = canonTweet.canonical;
   streamLog('retweeting: ', canonical);
 
-  client.post('statuses/retweet/' + tweet.id_str, {}, function(err) {
+  T.post('statuses/retweet/' + tweet.id_str, {}, function(err) {
     if (err) {
       console.log('error posting retweet: ', err);
       return cb(err);
     }
     return cb(null);
-  });
-}
-
-function retry(error) {
-  if (error) {
-    streamLog('retry: error: ', error);
-  }
-  streamLog('retry ' + retryCount);
-  setTimeout(connect, 5000 * retryCount++);
-}
-
-function createClient() {
-  client = new Twitter({
-    consumer_key: config.get('twitter.consumerKey'),
-    consumer_secret: config.get('twitter.consumerSecret'),
-    access_token_key: config.get('twitter.accessTokenKey'),
-    access_token_secret: config.get('twitter.accessTokenSecret')
   });
 }
 
@@ -161,22 +143,37 @@ function createStream(tweetStream) {
   return stream;
 }
 
-function connect() {
-  console.log('connecting');
-  client.stream('statuses/filter', {track: track}, function(tweetStream) {
-    createStream(tweetStream);
-    tweetStream.on('tweetStream error', retry);
+function createClient() {
+  return new Twit({
+    consumer_key: config.get('twitter.consumerKey'),
+    consumer_secret: config.get('twitter.consumerSecret'),
+    access_token: config.get('twitter.accessTokenKey'),
+    access_token_secret: config.get('twitter.accessTokenSecret')
   });
 }
 
-function disconnect() {
-  console.log('disconnecting');
-  client = null;
-  createClient();
-  connect();
+function connect(T) {
+  console.log('connecting');
+  var tweetStream = T.stream('statuses/filter', {track: track});
+  createStream(tweetStream);
+  tweetStream.on('tweetStream error', retry);
 }
 
-setTimeout(disconnect, 1000 * 60 * 60 * 4);
+function retry(error) {
+  if (error) {
+    streamLog('retry: error: ', error);
+  }
+  streamLog('retry ' + retryCount);
+  setTimeout(connect, 5000 * retryCount++);
+}
+
+// function disconnect() {
+//   console.log('disconnecting');
+//   client = null;
+//   connect(createClient());
+// }
+
+// setTimeout(disconnect, 1000 * 60 * 60 * 4);
 
 var http = require('http');
 var ipAddress = process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1';
@@ -189,5 +186,4 @@ http.createServer(function (req, res) {
 }).listen(port, ipAddress);
 
 // Main.
-createClient();
-connect();
+connect(createClient());
