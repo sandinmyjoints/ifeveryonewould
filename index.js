@@ -161,7 +161,7 @@ function retry(error) {
   setTimeout(connect, 5000 * retryCount++);
 }
 
-function connect(T) {
+function connect() {
   console.log('connecting');
   var tweetStream = T.stream('statuses/filter', {track: track});
   var streamStream = createStream(tweetStream);
@@ -180,7 +180,7 @@ function connect(T) {
 //   console.log('disconnecting');
 //   client = null;
 //   T = createClient();
-//   connect(T);
+//   connect();
 // }
 
 // setTimeout(disconnect, 1000 * 60 * 60 * 4);
@@ -197,5 +197,5 @@ http.createServer(function (req, res) {
 }).listen(port, ipAddress);
 
 // Main.
-var T = createClient();
-connect(T);
+T = createClient();
+connect();
