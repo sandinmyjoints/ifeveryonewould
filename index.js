@@ -15,6 +15,7 @@ var retryCount = 0;
 var tweetCount = 99;
 var memory = [];
 var memoryTweets = [];
+var T;
 
 function streamLog() {
   process.stdout.write('\n');
@@ -152,13 +153,6 @@ function createClient() {
   });
 }
 
-function connect(T) {
-  console.log('connecting');
-  var tweetStream = T.stream('statuses/filter', {track: track});
-  createStream(tweetStream);
-  tweetStream.on('tweetStream error', retry);
-}
-
 function retry(error) {
   if (error) {
     streamLog('retry: error: ', error);
@@ -167,14 +161,31 @@ function retry(error) {
   setTimeout(connect, 5000 * retryCount++);
 }
 
+function connect(T) {
+  console.log('connecting');
+  var tweetStream = T.stream('statuses/filter', {track: track});
+  var streamStream = createStream(tweetStream);
+  tweetStream.on('error', function(err) {
+    console.log('tweetStream error: ', err);
+    retry(err);
+  });
+  streamStream.on('error', function(err) {
+    console.log('streamStream error: ', err);
+    retry(err);
+  });
+}
+
+// Autodisconnect.
 // function disconnect() {
 //   console.log('disconnecting');
 //   client = null;
-//   connect(createClient());
+//   T = createClient();
+//   connect(T);
 // }
 
 // setTimeout(disconnect, 1000 * 60 * 60 * 4);
 
+// Ping server.
 var http = require('http');
 var ipAddress = process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1';
 var port = process.env.OPENSHIFT_NODEJS_PORT || 8080;
@@ -186,4 +197,5 @@ http.createServer(function (req, res) {
 }).listen(port, ipAddress);
 
 // Main.
-connect(createClient());
+var T = createClient();
+connect(T);
