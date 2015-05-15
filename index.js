@@ -9,12 +9,7 @@ var debug = require('debug')('debug');
 var leveldb = require('level');
 var db = leveldb('./tweetdb');
 
-var client = new Twitter({
-  consumer_key: config.get('twitter.consumerKey'),
-  consumer_secret: config.get('twitter.consumerSecret'),
-  access_token_key: config.get('twitter.accessTokenKey'),
-  access_token_secret: config.get('twitter.accessTokenSecret')
-});
+var client;
 
 var RE = /if\s+everyone\s+would/gi;
 var track = 'if everyone would';
@@ -135,6 +130,15 @@ function retry(error) {
   setTimeout(connect, 5000 * retryCount++);
 }
 
+function createClient() {
+  client = new Twitter({
+    consumer_key: config.get('twitter.consumerKey'),
+    consumer_secret: config.get('twitter.consumerSecret'),
+    access_token_key: config.get('twitter.accessTokenKey'),
+    access_token_secret: config.get('twitter.accessTokenSecret')
+  });
+}
+
 function createStream(tweetStream) {
   streamLog('creating stream');
 
@@ -165,5 +169,25 @@ function connect() {
   });
 }
 
+function disconnect() {
+  console.log('disconnecting');
+  client = null;
+  createClient();
+  connect();
+}
+
+setTimeout(disconnect, 1000 * 60 * 60 * 4);
+
+var http = require('http');
+var ipAddress = process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1';
+var port = process.env.OPENSHIFT_NODEJS_PORT || 8080;
+
+http.createServer(function (req, res) {
+  console.log('pinged at ' + req.url);
+  res.writeHead(204);
+  res.end();
+}).listen(port, ipAddress);
+
 // Main.
+createClient();
 connect();
