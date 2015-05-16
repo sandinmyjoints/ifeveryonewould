@@ -136,9 +136,9 @@ function createStream(tweetStream) {
     .pipe(es.map(retweet));
 
   stream.on('error', function(err) {
-    console.log('stream error: ', err);
-    stream.end();
-    createStream(tweetStream);
+    console.log('plain old stream error: ', err);
+    console.log('doing nothing.');
+
   });
 
   return stream;
@@ -153,10 +153,7 @@ function createClient() {
   });
 }
 
-function retry(error) {
-  if (error) {
-    streamLog('retry: error: ', error);
-  }
+function retry() {
   streamLog('retry ' + retryCount);
   setTimeout(connect, 5000 * retryCount++);
 }
@@ -167,11 +164,14 @@ function connect(T) {
   var streamStream = createStream(tweetStream);
   tweetStream.on('error', function(err) {
     console.log('tweetStream error: ', err);
+    console.log('retrying.');
     retry(err);
   });
+
   streamStream.on('error', function(err) {
     console.log('streamStream error: ', err);
-    retry(err);
+    console.log('doing nothing.');
+    //retry(err);
   });
 }
 
