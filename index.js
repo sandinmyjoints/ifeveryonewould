@@ -5,40 +5,42 @@ var config = require('config');
 var Twit = require('twit');
 var emitStream = require('emit-stream');
 var es = require('event-stream');
+var _ = require('lodash');
+
 var debug = require('debug')('debug');
+var Firebase = require('firebase');
 
 // var leveldb = require('level');
 // var db = leveldb('./tweetdb');
 
-var Firebase = require('firebase');
+var RE = /if\s+everyone\s+would/gi;
+var track = 'if everyone would';
+var retryCount = 0;
+var tweetCount = 99;
 
+var T;
+var tweetStream;
+var lastEvent;
+var lastRetweetId;
+
+// Firebase.
 var FIREBASE_ROOT = 'https://boiling-heat-5264.firebaseio.com/ifeveryonewould';
 var fdb = new Firebase(FIREBASE_ROOT);
 var memoryRef = fdb.child('memory');
 var memory;
 
-memoryRef.once('value', function(snap) {
-  memory = snap.val();
-  console.log('all known retweets: ', memory);
+memoryRef.once('value', function(snapAll) {
+  memory = _.values(snapAll.val()) || [];
+  debug('all known retweets: ', memory);
+  console.log('known retweets: %d', memory.length);
+
+  memoryRef.on('child_added', function(snap) {
+    console.log('added child', snap.key(), snap.val());
+    memory.push(snap.val());
+  });
 });
 
-memoryRef.on('child_added', function(snap) {
-  console.log('added child', snap.key(), snap.val());
-  memory.push(snap.val());
-});
-
-/*
-. an array of retweet ids
-. pull the array and check it each time we retweet
-. push to the array each time we retweet
-*/
-var RE = /if\s+everyone\s+would/gi;
-var track = 'if everyone would';
-var retryCount = 0;
-var tweetCount = 99;
-var T;
-var lastEvent;
-
+// Pipeline.
 function streamLog() {
   process.stdout.write('\n');
   console.log.apply(console, arguments);
@@ -117,9 +119,10 @@ function dropRepeats(canonTweet, cb) {
   var tweet = canonTweet.tweet;
 
   if (tweet.retweeted_status) {
-    debug('new tweet with id_str ' + tweet.id_str + ' was in reply to ' + tweet.retweeted_status.id_str);
+    lastRetweetId = tweet.retweeted_status.id_str
+    debug('new tweet with id_str ' + tweet.id_str + ' was in reply to ' + lastRetweetId);
 
-    if (memory.indexOf(tweet.retweeted_status.id_str) > -1) {
+    if (memory.indexOf(lastRetweetId) > -1) {
       return cb();
     }
     return cb(null, canonTweet);
@@ -139,23 +142,33 @@ function dropRepeats(canonTweet, cb) {
 function remember(canonTweet, cb) {
   debug('remembering.');
   var tweet = canonTweet.tweet;
-  memoryRef.push(tweet.id_str, cb);
+  memoryRef.push(tweet.id_str, function(err) {
+    if (err) {
+      console.error('error remembering: %s', err);
+    }
+    cb(null, canonTweet);
+  });
 }
 
 function retweet(canonTweet, cb) {
   var tweet = canonTweet.tweet;
   var canonical = canonTweet.canonical;
-  streamLog('retweeting: ', canonical);
+  streamLog('retweeting: ', canonTweet.tweet.id_str, canonical);
 
   T.post('statuses/retweet/' + tweet.id_str, {}, function(err) {
     if (err) {
-      console.log('error posting retweet: ', err);
+      console.error('error posting retweet: %s', err);
+
+      // Save it so we don't try to retweet it again.
+      memoryRef.push(lastRetweetId);
+
       return cb(err);
     }
     return cb(null);
   });
 }
 
+// Init.
 function createStream(tweetStream) {
   streamLog('creating stream');
 
@@ -179,30 +192,35 @@ function createClient() {
   });
 }
 
-function retry() {
-  streamLog('retry ' + retryCount);
-  setTimeout(connect, 5000 * retryCount++);
-}
-
 function connect() {
   console.log('connecting');
-  var tweetStream = T.stream('statuses/filter', {track: track});
+  tweetStream = T.stream('statuses/filter', {track: track});
   var streamStream = createStream(tweetStream);
 
   tweetStream.on('error', function(err) {
-    console.log('tweetStream error: ', err);
-    console.log('doing nothing.');
+    console.error('tweetStream error: ', err);
     // console.log('retrying.');
     // retry(err);
   });
 
   streamStream.on('error', function(err) {
-    console.log('streamStream error: ', err);
-    console.log('doing nothing.');
+    console.error('streamStream error: ', err);
     // console.log('retrying.');
     // retry(err);
   });
 }
+
+['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT',
+ 'SIGBUS', 'SIGFPE', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGTERM'
+].forEach(function(signal) {
+  process.on(signal, function() {
+    debug('caught %s, stopping', signal);
+    tweetStream.stop();
+    setTimeout(function() {
+      throw new Error('stopped');
+    }, 1000);
+  });
+});
 
 // Ping server.
 var http = require('http');
