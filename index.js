@@ -13,9 +13,8 @@ var RE = /if\s+everyone\s+would/gi;
 var track = 'if everyone would';
 var retryCount = 0;
 var tweetCount = 99;
-var memory = [];
-var memoryTweets = [];
 var T;
+var lastEvent;
 
 function streamLog() {
   process.stdout.write('\n');
@@ -35,9 +34,15 @@ function countTweet(data, cb) {
 }
 
 function pickTweet(data, cb) {
-  debug('event type', data[0]);
-  if (data[0] === 'tweet') {
+  var eventType = data[0];
+  debug('event type', eventType);
+  if (eventType === 'tweet') {
+    lastEvent = eventType;
     return cb(null, data[1]);
+  }
+  if (lastEvent !== 'connected' || eventType !== 'connected') {
+    console.log('event: ', eventType);
+    lastEvent = eventType;
   }
   return cb();
 }
@@ -125,7 +130,7 @@ function retweet(canonTweet, cb) {
 function createStream(tweetStream) {
   streamLog('creating stream');
 
-  var stream = emitStream(tweetStream)
+  return emitStream(tweetStream)
     .pipe(es.map(countTweet))
     .pipe(es.map(pickTweet))
     .pipe(es.map(dropMTs))
@@ -134,14 +139,6 @@ function createStream(tweetStream) {
     .pipe(es.map(dropRepeats))
     .pipe(es.map(remember))
     .pipe(es.map(retweet));
-
-  stream.on('error', function(err) {
-    console.log('plain old stream error: ', err);
-    console.log('doing nothing.');
-
-  });
-
-  return stream;
 }
 
 function createClient() {
@@ -162,28 +159,21 @@ function connect() {
   console.log('connecting');
   var tweetStream = T.stream('statuses/filter', {track: track});
   var streamStream = createStream(tweetStream);
+
   tweetStream.on('error', function(err) {
     console.log('tweetStream error: ', err);
-    console.log('retrying.');
-    retry(err);
+    console.log('doing nothing.');
+    // console.log('retrying.');
+    // retry(err);
   });
 
   streamStream.on('error', function(err) {
     console.log('streamStream error: ', err);
     console.log('doing nothing.');
-    //retry(err);
+    // console.log('retrying.');
+    // retry(err);
   });
 }
-
-// Autodisconnect.
-// function disconnect() {
-//   console.log('disconnecting');
-//   client = null;
-//   T = createClient();
-//   connect();
-// }
-
-// setTimeout(disconnect, 1000 * 60 * 60 * 4);
 
 // Ping server.
 var http = require('http');
