@@ -25,6 +25,8 @@ var fdb = new Firebase(FIREBASE_ROOT);
 var memoryRef = fdb.child('memory');
 var memory;
 
+console.log('memoryRef');
+
 memoryRef.once('value', function(snapAll) {
   memory = _.values(snapAll.val()) || [];
   debug('all known retweets: ', memory);
