@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "eslint .",
-    "start": "node index.js"
+    "start": "DEBUG=debug node index.js"
   },
   "author": "William Bert <william.bert@gmail.com>",
   "license": "ISC",
