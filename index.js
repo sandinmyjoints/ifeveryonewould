@@ -10,12 +10,8 @@ var _ = require('lodash');
 var debug = require('debug')('debug');
 var Firebase = require('firebase');
 
-// var leveldb = require('level');
-// var db = leveldb('./tweetdb');
-
 var RE = /if\s+everyone\s+would/gi;
 var track = 'if everyone would';
-var retryCount = 0;
 var tweetCount = 99;
 
 var T;
@@ -35,7 +31,7 @@ memoryRef.once('value', function(snapAll) {
   console.log('known retweets: %d', memory.length);
 
   memoryRef.on('child_added', function(snap) {
-    console.log('added child', snap.key(), snap.val());
+    debug('added child %s %s', snap.key(), snap.val());
     memory.push(snap.val());
   });
 });
@@ -44,10 +40,6 @@ memoryRef.once('value', function(snapAll) {
 function streamLog() {
   process.stdout.write('\n');
   console.log.apply(console, arguments);
-}
-
-function resetRetryCount() {
-  retryCount = 0;
 }
 
 function countTweet(data, cb) {
@@ -102,7 +94,6 @@ function _textFromRetweet(text) {
 
 function canonicalize(tweet, cb) {
   var textFromRetweet = _textFromRetweet(tweet.text);
-  resetRetryCount();
   if (!textFromRetweet) {
     return cb();
   }
@@ -119,20 +110,13 @@ function dropRepeats(canonTweet, cb) {
   var tweet = canonTweet.tweet;
 
   if (tweet.retweeted_status) {
-    lastRetweetId = tweet.retweeted_status.id_str
-    debug('new tweet with id_str ' + tweet.id_str + ' was in reply to ' + lastRetweetId);
+    lastRetweetId = tweet.retweeted_status.id_str;
+    debug('new tweet ' + tweet.id_str + ' was in reply to ' + lastRetweetId);
 
     if (memory.indexOf(lastRetweetId) > -1) {
       return cb();
     }
     return cb(null, canonTweet);
-
-    // db.get(tweet.retweeted_status.id_str, function(err, wasAlreadyRetweeted) {
-    //   if(wasAlreadyRetweeted) {
-    //     return cb();
-    //   }
-    //   return cb(null, canonTweet);
-    // });
 
   } else {
     return cb(null, canonTweet);
@@ -199,14 +183,10 @@ function connect() {
 
   tweetStream.on('error', function(err) {
     console.error('tweetStream error: ', err);
-    // console.log('retrying.');
-    // retry(err);
   });
 
   streamStream.on('error', function(err) {
     console.error('streamStream error: ', err);
-    // console.log('retrying.');
-    // retry(err);
   });
 }
 
