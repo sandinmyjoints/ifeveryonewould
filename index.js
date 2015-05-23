@@ -6,9 +6,32 @@ var Twit = require('twit');
 var emitStream = require('emit-stream');
 var es = require('event-stream');
 var debug = require('debug')('debug');
-var leveldb = require('level');
-var db = leveldb('./tweetdb');
 
+// var leveldb = require('level');
+// var db = leveldb('./tweetdb');
+
+var Firebase = require('firebase');
+
+var FIREBASE_ROOT = 'https://boiling-heat-5264.firebaseio.com/ifeveryonewould';
+var fdb = new Firebase(FIREBASE_ROOT);
+var memoryRef = fdb.child('memory');
+var memory;
+
+memoryRef.once('value', function(snap) {
+  memory = snap.val();
+  console.log('all known retweets: ', memory);
+});
+
+memoryRef.on('child_added', function(snap) {
+  console.log('added child', snap.key(), snap.val());
+  memory.push(snap.val());
+});
+
+/*
+. an array of retweet ids
+. pull the array and check it each time we retweet
+. push to the array each time we retweet
+*/
 var RE = /if\s+everyone\s+would/gi;
 var track = 'if everyone would';
 var retryCount = 0;
@@ -93,12 +116,18 @@ function dropRepeats(canonTweet, cb) {
 
   if (tweet.retweeted_status) {
     debug('new tweet with id_str ' + tweet.id_str + ' was in reply to ' + tweet.retweeted_status.id_str);
-    db.get(tweet.retweeted_status.id_str, function(err, wasAlreadyRetweeted) {
-      if(wasAlreadyRetweeted) {
-        return cb();
-      }
-      return cb(null, canonTweet);
-    });
+
+    if (memory.indexOf(tweet.retweeted_status.id_str) > -1) {
+      return cb();
+    }
+    return cb(null, canonTweet);
+
+    // db.get(tweet.retweeted_status.id_str, function(err, wasAlreadyRetweeted) {
+    //   if(wasAlreadyRetweeted) {
+    //     return cb();
+    //   }
+    //   return cb(null, canonTweet);
+    // });
 
   } else {
     return cb(null, canonTweet);
@@ -108,9 +137,7 @@ function dropRepeats(canonTweet, cb) {
 function remember(canonTweet, cb) {
   debug('remembering.');
   var tweet = canonTweet.tweet;
-  db.put(tweet.id_str, true, function(err) {
-    return cb(err, canonTweet);
-  });
+  memoryRef.push(tweet.id_str, cb);
 }
 
 function retweet(canonTweet, cb) {

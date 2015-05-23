@@ -15,6 +15,7 @@
     "emit-stream": "0.1.2",
     "eslint": "0.18.0",
     "event-stream": "3.3.0",
+    "firebase": "2.2.5",
     "level": "^0.18.0",
     "lodash": "3.6.0",
     "twit": "1.1.20"
