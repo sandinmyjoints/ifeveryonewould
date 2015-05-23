@@ -50,7 +50,9 @@ function resetRetryCount() {
 
 function countTweet(data, cb) {
   if (++tweetCount >= 100) {
-    process.stdout.write('.');
+    if (!process.env.DEBUG) {
+      process.stdout.write('.');
+    }
     tweetCount = 0;
   }
   cb(null, data);
@@ -58,13 +60,13 @@ function countTweet(data, cb) {
 
 function pickTweet(data, cb) {
   var eventType = data[0];
-  debug('event type', eventType);
+
   if (eventType === 'tweet') {
-    lastEvent = eventType;
+    debug('event type %s', eventType);
     return cb(null, data[1]);
   }
   if (lastEvent !== 'connected' || eventType !== 'connected') {
-    console.log('event: ', eventType);
+    debug('event: %s', eventType);
     lastEvent = eventType;
   }
   return cb();
@@ -72,7 +74,7 @@ function pickTweet(data, cb) {
 
 function dropMTs(tweet, cb) {
   if (/^\s*MT:/.test(tweet.text)) {
-    debug('dropping MT: ', tweet.text);
+    debug('dropping MT: %s', tweet.text);
     return cb();
   }
   return cb(null, tweet);
