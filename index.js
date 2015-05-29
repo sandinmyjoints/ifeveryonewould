@@ -23,20 +23,7 @@ var lastRetweetId;
 var FIREBASE_ROOT = 'https://boiling-heat-5264.firebaseio.com/ifeveryonewould';
 var fdb = new Firebase(FIREBASE_ROOT);
 var memoryRef = fdb.child('memory');
-var memory;
-
-console.log('memoryRef');
-
-memoryRef.once('value', function(snapAll) {
-  memory = _.values(snapAll.val()) || [];
-  debug('all known retweets: ', memory);
-  console.log('known retweets: %d', memory.length);
-
-  memoryRef.on('child_added', function(snap) {
-    debug('added child %s %s', snap.key(), snap.val());
-    memory.push(snap.val());
-  });
-});
+var memory = [];
 
 // Pipeline.
 function streamLog() {
@@ -216,5 +203,16 @@ http.createServer(function (req, res) {
 }).listen(port, ipAddress);
 
 // Main.
-T = createClient();
-connect();
+memoryRef.once('value', function(snapAll) {
+  memory = _.values(snapAll.val()) || [];
+  debug('all known retweets: ', memory);
+  console.log('known retweets: %d', memory.length);
+
+  T = createClient();
+  connect();
+
+  memoryRef.on('child_added', function(snap) {
+    debug('added child %s %s', snap.key(), snap.val());
+    memory.push(snap.val());
+  });
+});
