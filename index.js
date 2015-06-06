@@ -2,49 +2,62 @@
 /* eslint no-console: 0 */
 
 var config = require('config');
-var Twitter = require('twitter');
+var Twit = require('twit');
 var emitStream = require('emit-stream');
 var es = require('event-stream');
-var debug = require('debug')('debug');
-var leveldb = require('level');
-var db = leveldb('./tweetdb');
+var _ = require('lodash');
 
-var client;
+var debug = require('debug')('debug');
+var Firebase = require('firebase');
 
 var RE = /if\s+everyone\s+would/gi;
 var track = 'if everyone would';
-var retryCount = 0;
 var tweetCount = 99;
-var memory = [];
-var memoryTweets = [];
 
+var T;
+var tweetStream;
+var lastEvent;
+var lastRetweetId;
+
+// Firebase.
+var FIREBASE_ROOT = 'https://boiling-heat-5264.firebaseio.com/ifeveryonewould';
+var fdb = new Firebase(FIREBASE_ROOT);
+var memoryRef = fdb.child('memory');
+var memory = [];
+
+// Pipeline.
 function streamLog() {
   process.stdout.write('\n');
   console.log.apply(console, arguments);
 }
 
-function resetRetryCount() {
-  retryCount = 0;
-}
-
 function countTweet(data, cb) {
   if (++tweetCount >= 100) {
-    process.stdout.write('.');
+    if (!process.env.DEBUG) {
+      process.stdout.write('.');
+    }
     tweetCount = 0;
   }
   cb(null, data);
 }
 
 function pickTweet(data, cb) {
-  if (data[1]) {
+  var eventType = data[0];
+
+  if (eventType === 'tweet') {
+    debug('event type %s', eventType);
     return cb(null, data[1]);
+  }
+  if (lastEvent !== 'connected' || eventType !== 'connected') {
+    debug('event: %s', eventType);
+    lastEvent = eventType;
   }
   return cb();
 }
 
 function dropMTs(tweet, cb) {
   if (/^\s*MT:/.test(tweet.text)) {
-    debug('dropping MT: ', tweet.text);
+    debug('dropping MT: %s', tweet.text);
     return cb();
   }
   return cb(null, tweet);
@@ -70,7 +83,6 @@ function _textFromRetweet(text) {
 
 function canonicalize(tweet, cb) {
   var textFromRetweet = _textFromRetweet(tweet.text);
-  resetRetryCount();
   if (!textFromRetweet) {
     return cb();
   }
@@ -87,13 +99,13 @@ function dropRepeats(canonTweet, cb) {
   var tweet = canonTweet.tweet;
 
   if (tweet.retweeted_status) {
-    debug('new tweet with id_str ' + tweet.id_str + ' was in reply to ' + tweet.retweeted_status.id_str);
-    db.get(tweet.retweeted_status.id_str, function(err, wasAlreadyRetweeted) {
-      if(wasAlreadyRetweeted) {
-        return cb();
-      }
-      return cb(null, canonTweet);
-    });
+    lastRetweetId = tweet.retweeted_status.id_str;
+    debug('new tweet ' + tweet.id_str + ' was in reply to ' + lastRetweetId);
+
+    if (memory.indexOf(lastRetweetId) > -1) {
+      return cb();
+    }
+    return cb(null, canonTweet);
 
   } else {
     return cb(null, canonTweet);
@@ -103,46 +115,36 @@ function dropRepeats(canonTweet, cb) {
 function remember(canonTweet, cb) {
   debug('remembering.');
   var tweet = canonTweet.tweet;
-  db.put(tweet.id_str, true, function(err) {
-    return cb(err, canonTweet);
+  memoryRef.push(tweet.id_str, function(err) {
+    if (err) {
+      console.error('error remembering: %s', err);
+    }
+    cb(null, canonTweet);
   });
 }
 
 function retweet(canonTweet, cb) {
   var tweet = canonTweet.tweet;
   var canonical = canonTweet.canonical;
-  streamLog('retweeting: ', canonical);
+  streamLog('retweeting: ', canonTweet.tweet.id_str, canonical);
 
-  client.post('statuses/retweet/' + tweet.id_str, {}, function(err) {
+  T.post('statuses/retweet/' + tweet.id_str, {}, function(err) {
     if (err) {
-      console.log('error posting retweet: ', err);
+      console.error('error posting retweet: %s', err);
+
+      // Save it so we don't try to retweet it again.
+      memoryRef.push(lastRetweetId);
+
       return cb(err);
     }
     return cb(null);
   });
 }
 
-function retry(error) {
-  if (error) {
-    streamLog('retry: error: ', error);
-  }
-  streamLog('retry ' + retryCount);
-  setTimeout(connect, 5000 * retryCount++);
-}
-
-function createClient() {
-  client = new Twitter({
-    consumer_key: config.get('twitter.consumerKey'),
-    consumer_secret: config.get('twitter.consumerSecret'),
-    access_token_key: config.get('twitter.accessTokenKey'),
-    access_token_secret: config.get('twitter.accessTokenSecret')
-  });
-}
-
 function createStream(tweetStream) {
   streamLog('creating stream');
 
-  var stream = emitStream(tweetStream)
+  return emitStream(tweetStream)
     .pipe(es.map(countTweet))
     .pipe(es.map(pickTweet))
     .pipe(es.map(dropMTs))
@@ -151,43 +153,65 @@ function createStream(tweetStream) {
     .pipe(es.map(dropRepeats))
     .pipe(es.map(remember))
     .pipe(es.map(retweet));
+}
 
-  stream.on('error', function(err) {
-    console.log('stream error: ', err);
-    stream.end();
-    createStream(tweetStream);
+function createClient() {
+  return new Twit({
+    consumer_key: config.get('twitter.consumerKey'),
+    consumer_secret: config.get('twitter.consumerSecret'),
+    access_token: config.get('twitter.accessTokenKey'),
+    access_token_secret: config.get('twitter.accessTokenSecret')
   });
-
-  return stream;
 }
 
 function connect() {
   console.log('connecting');
-  client.stream('statuses/filter', {track: track}, function(tweetStream) {
-    createStream(tweetStream);
-    tweetStream.on('tweetStream error', retry);
+  tweetStream = T.stream('statuses/filter', {track: track});
+  var streamStream = createStream(tweetStream);
+
+  tweetStream.on('error', function(err) {
+    console.error('tweetStream error: ', err);
+  });
+
+  streamStream.on('error', function(err) {
+    console.error('streamStream error: ', err);
   });
 }
 
-function disconnect() {
-  console.log('disconnecting');
-  client = null;
-  createClient();
-  connect();
-}
+['SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 'SIGTRAP', 'SIGABRT',
+ 'SIGBUS', 'SIGFPE', 'SIGUSR1', 'SIGSEGV', 'SIGUSR2', 'SIGTERM'
+].forEach(function(signal) {
+  process.on(signal, function() {
+    debug('caught %s, stopping', signal);
+    tweetStream.stop();
+    setTimeout(function() {
+      throw new Error('stopped');
+    }, 1000);
+  });
+});
 
-setTimeout(disconnect, 1000 * 60 * 60 * 4);
-
+// Ping server.
 var http = require('http');
 var ipAddress = process.env.OPENSHIFT_NODEJS_IP || '127.0.0.1';
 var port = process.env.OPENSHIFT_NODEJS_PORT || 8080;
 
 http.createServer(function (req, res) {
-  console.log('pinged at ' + req.url);
+  debug('pinged at ' + req.url);
   res.writeHead(204);
   res.end();
 }).listen(port, ipAddress);
 
 // Main.
-createClient();
-connect();
+memoryRef.once('value', function(snapAll) {
+  memory = _.values(snapAll.val()) || [];
+  debug('all known retweets: ', memory);
+  console.log('known retweets: %d', memory.length);
+
+  T = createClient();
+  connect();
+
+  memoryRef.on('child_added', function(snap) {
+    debug('added child %s %s', snap.key(), snap.val());
+    memory.push(snap.val());
+  });
+});
