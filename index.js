@@ -204,7 +204,7 @@ http.createServer(function (req, res) {
 // Main.
 memoryRef.once('value', function(snapAll) {
   memory = _.values(snapAll.val()) || [];
-  debug('all known retweets: ', memory);
+  // debug('all known retweets: ', memory);
   console.log('known retweets: %d', memory.length);
 
   T = createClient();
