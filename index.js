@@ -212,6 +212,7 @@ memoryRef.once('value', function(snapAll) {
 
   memoryRef.on('child_added', function(snap) {
     // debug('added child %s %s', snap.key(), snap.val());
+
     memory.push(snap.val());
   });
 });
